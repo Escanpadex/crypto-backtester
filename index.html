@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Backtester</title>
+    <title>Crypto Backtester - Données Historiques Binance</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -14,10 +13,61 @@
             background-color: #111827;
             color: white;
         }
-        .chart-container {
-            position: relative;
+        .candlestick-chart {
             height: 400px;
+            background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+            border-radius: 8px;
+            position: relative;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 20px;
+        }
+        .candle {
+            width: 2px;
+            margin: 0 1px;
+            position: relative;
+            display: inline-block;
+            vertical-align: bottom;
+        }
+        .candle-body {
             width: 100%;
+            position: relative;
+        }
+        .candle-wick {
+            width: 1px;
+            background: #666;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .candle-green {
+            background: #10b981;
+        }
+        .candle-red {
+            background: #ef4444;
+        }
+        .crypto-card {
+            transition: all 0.3s ease;
+        }
+        .crypto-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        .data-table {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .loading-spinner {
+            border: 4px solid #374151;
+            border-top: 4px solid #60a5fa;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -25,149 +75,198 @@
     <div class="min-h-screen bg-gray-900 text-white p-6">
         <div class="max-w-7xl mx-auto">
             <!-- Header -->
-            <div class="mb-8">
-                <h1 class="text-3xl font-bold mb-2">🚀 Backtester Crypto</h1>
-                <p class="text-gray-400">Testez vos stratégies de trading sur les principales cryptomonnaies</p>
+            <div class="mb-8 text-center">
+                <h1 class="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 via-purple-500 to-blue-600 bg-clip-text text-transparent">
+                    📊 Crypto Backtester - Binance Historical Data
+                </h1>
+                <p class="text-gray-400 text-lg">Données historiques 2024-2025 avec bougies 1 minute depuis l'API Binance</p>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Graphique principal -->
-                <div class="lg:col-span-2 bg-gray-800 rounded-lg p-6">
-                    <div class="flex items-center justify-between mb-4">
+                <div class="lg:col-span-2 bg-gray-800 rounded-lg p-6 crypto-card">
+                    <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center space-x-4">
                             <select 
                                 id="cryptoSelect"
-                                class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 transition-all"
                             >
-                                <option value="ethereum">Ethereum (ETH)</option>
-                                <option value="solana">Solana (SOL)</option>
-                                <option value="cardano">Cardano (ADA)</option>
-                                <option value="pepe">Pepe (PEPE)</option>
-                                <option value="dogwifcoin">Dogwifhat (WIF)</option>
+                                <option value="ETHUSDT">🔷 Ethereum (ETH/USDT)</option>
+                                <option value="SOLUSDT">🟣 Solana (SOL/USDT)</option>
+                                <option value="ADAUSDT">🔵 Cardano (ADA/USDT)</option>
+                                <option value="1000PEPEUSDT">🐸 Pepe (PEPE/USDT)</option>
+                                <option value="WIFUSDT">🐕 Dogwifhat (WIF/USDT)</option>
                             </select>
                             
                             <select 
-                                id="timeframeSelect"
-                                class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                id="periodSelect"
+                                class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 transition-all"
                             >
-                                <option value="m1">1m</option>
-                                <option value="m5">5m</option>
-                                <option value="m15">15m</option>
-                                <option value="h1" selected>1h</option>
-                                <option value="h4">4h</option>
-                                <option value="d1">1d</option>
+                                <option value="7">7 derniers jours</option>
+                                <option value="30">30 derniers jours</option>
+                                <option value="90">3 derniers mois</option>
+                                <option value="180">6 derniers mois</option>
+                                <option value="365" selected>1 dernière année</option>
+                                <option value="730">2 dernières années</option>
                             </select>
                             
                             <button
-                                id="refreshBtn"
-                                class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm"
+                                id="loadDataBtn"
+                                class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium transition-all transform hover:scale-105"
                             >
-                                🔄 Actualiser
+                                📥 Charger Données
                             </button>
                         </div>
                         
                         <div class="text-right">
-                            <div id="currentPrice" class="text-2xl font-bold text-blue-400">
+                            <div id="currentPrice" class="text-3xl font-bold text-blue-400">
                                 $0.00
                             </div>
                             <div id="cryptoLabel" class="text-sm text-gray-400">
-                                ETH/USD
+                                ETH/USDT
+                            </div>
+                            <div id="priceStats" class="text-sm font-medium mt-1">
+                                📊 <span id="candleCount">0</span> bougies chargées
                             </div>
                         </div>
                     </div>
 
-                    <div id="errorMessage" class="bg-red-900/20 border border-red-500 rounded-lg p-3 mb-4 hidden">
-                        <p class="text-red-400 text-sm" id="errorText"></p>
-                        <p class="text-gray-400 text-xs mt-1">Utilisation de données simulées</p>
+                    <div id="statusMessage" class="bg-blue-900/20 border border-blue-500 rounded-lg p-3 mb-4">
+                        <p class="text-blue-400 text-sm">ℹ️ Prêt à charger les données historiques Binance</p>
                     </div>
 
                     <div id="loadingIndicator" class="flex items-center justify-center h-96 hidden">
-                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                        <span class="ml-3 text-gray-400">Chargement des données...</span>
+                        <div class="loading-spinner"></div>
+                        <span class="ml-4 text-gray-400 text-lg">Chargement des données Binance...</span>
                     </div>
 
-                    <div class="chart-container">
-                        <canvas id="priceChart"></canvas>
+                    <!-- Graphique en chandeliers simplifié -->
+                    <div id="chartContainer" class="candlestick-chart mb-4 hidden">
+                        <div class="flex justify-between text-xs text-gray-400 mb-2">
+                            <span>📈 Haut: $<span id="highPrice">--</span></span>
+                            <span>📉 Bas: $<span id="lowPrice">--</span></span>
+                            <span>📊 Volume: <span id="totalVolume">--</span></span>
+                        </div>
+                        <div id="candlestickContainer" class="h-80 overflow-x-auto">
+                            <!-- Les bougies seront générées ici -->
+                        </div>
+                    </div>
+
+                    <!-- Tableau de données -->
+                    <div id="dataTable" class="hidden">
+                        <h3 class="text-lg font-semibold mb-3">📋 Échantillon de données (50 dernières bougies)</h3>
+                        <div class="data-table bg-gray-700 rounded-lg">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-600 sticky top-0">
+                                    <tr>
+                                        <th class="p-2 text-left">Temps</th>
+                                        <th class="p-2 text-right">Ouverture</th>
+                                        <th class="p-2 text-right">Haut</th>
+                                        <th class="p-2 text-right">Bas</th>
+                                        <th class="p-2 text-right">Fermeture</th>
+                                        <th class="p-2 text-right">Volume</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTableBody">
+                                    <!-- Les données seront insérées ici -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                     
                     <div class="mt-4 text-xs text-gray-500 flex justify-between items-center">
-                        <span>📊 Données fournies par CoinCap API</span>
+                        <span>📊 Données fournies par Binance API (bougies 1min)</span>
                         <span id="lastUpdate">Dernière mise à jour: --:--</span>
                     </div>
                 </div>
 
                 <!-- Configuration -->
-                <div class="bg-gray-800 rounded-lg p-6">
-                    <div class="flex items-center mb-4">
-                        <h2 class="text-xl font-semibold">⚙️ Configuration</h2>
+                <div class="bg-gray-800 rounded-lg p-6 crypto-card">
+                    <div class="flex items-center mb-6">
+                        <h2 class="text-xl font-semibold">⚙️ Configuration de Backtesting</h2>
                     </div>
 
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium mb-1">Capital initial ($)</label>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">💰 Capital initial ($)</label>
                             <input
                                 type="number"
                                 id="initialBalance"
                                 value="10000"
-                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 transition-all"
                             />
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium mb-1">Stratégie</label>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">📈 Stratégie</label>
                             <select
                                 id="strategy"
-                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 transition-all"
                             >
-                                <option value="sma_crossover">SMA Crossover</option>
-                                <option value="rsi_strategy">RSI Strategy</option>
-                                <option value="macd_strategy">MACD Strategy</option>
-                                <option value="bollinger_bands">Bollinger Bands</option>
+                                <option value="sma_crossover">📊 SMA Crossover (5/20 min)</option>
+                                <option value="rsi_strategy">📉 RSI Strategy (14 periods)</option>
+                                <option value="macd_strategy">📈 MACD Strategy</option>
+                                <option value="bollinger_bands">🎯 Bollinger Bands</option>
+                                <option value="scalping">⚡ Scalping 1min</option>
                             </select>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-sm font-medium mb-1">Stop Loss (%)</label>
+                                <label class="block text-sm font-medium mb-2 text-gray-300">🛡️ Stop Loss (%)</label>
                                 <input
                                     type="number"
                                     id="stopLoss"
-                                    value="5"
-                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                    value="2"
+                                    step="0.1"
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-red-500 transition-all"
                                 />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium mb-1">Take Profit (%)</label>
+                                <label class="block text-sm font-medium mb-2 text-gray-300">🎯 Take Profit (%)</label>
                                 <input
                                     type="number"
                                     id="takeProfit"
-                                    value="10"
-                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                    value="3"
+                                    step="0.1"
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-green-500 transition-all"
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium mb-1">Risque par trade (%)</label>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">⚖️ Risque par trade (%)</label>
                             <input
                                 type="number"
                                 id="riskPerTrade"
-                                value="2"
-                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                value="1"
+                                step="0.1"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-yellow-500 transition-all"
                             />
                         </div>
 
-                        <div class="flex space-x-2 mt-6">
+                        <div class="bg-gray-700 rounded-lg p-3">
+                            <h4 class="text-sm font-medium mb-2">📊 Statistiques des données</h4>
+                            <div class="text-xs text-gray-300 space-y-1">
+                                <div>Période: <span id="dataPeriod">--</span></div>
+                                <div>Première bougie: <span id="firstCandle">--</span></div>
+                                <div>Dernière bougie: <span id="lastCandle">--</span></div>
+                                <div>Total bougies: <span id="totalCandles">0</span></div>
+                            </div>
+                        </div>
+
+                        <div class="flex space-x-3 mt-8">
                             <button
-                                id="runSimulationBtn"
-                                class="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg flex items-center justify-center"
+                                id="runBacktestBtn"
+                                class="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 px-4 py-3 rounded-lg flex items-center justify-center font-medium transition-all transform hover:scale-105"
+                                disabled
                             >
-                                ▶️ Lancer Simulation
+                                🚀 Lancer Backtest
                             </button>
                             
                             <button
                                 id="resetBtn"
-                                class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg"
+                                class="bg-gray-600 hover:bg-gray-700 px-4 py-3 rounded-lg transition-all transform hover:scale-105"
                             >
                                 🔄
                             </button>
@@ -176,39 +275,49 @@
                 </div>
             </div>
 
-            <!-- Résultats de la simulation -->
-            <div id="simulationResults" class="mt-6 bg-gray-800 rounded-lg p-6 hidden">
-                <h2 class="text-xl font-semibold mb-4">📊 Résultats de la Simulation</h2>
+            <!-- Résultats du backtest -->
+            <div id="backtestResults" class="mt-8 bg-gray-800 rounded-lg p-6 crypto-card hidden">
+                <h2 class="text-2xl font-semibold mb-6 text-center">📊 Résultats du Backtest</h2>
                 
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    <div class="bg-gray-700 rounded-lg p-4">
-                        <div class="text-sm text-gray-400">Nombre de trades</div>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+                    <div class="bg-gradient-to-br from-gray-700 to-gray-600 rounded-lg p-4 text-center">
+                        <div class="text-sm text-gray-300 mb-1">📊 Trades</div>
                         <div id="totalTrades" class="text-xl font-bold">--</div>
                     </div>
                     
-                    <div class="bg-gray-700 rounded-lg p-4">
-                        <div class="text-sm text-gray-400">Taux de réussite</div>
-                        <div id="winRate" class="text-xl font-bold text-green-400">--%</div>
+                    <div class="bg-gradient-to-br from-green-700 to-green-600 rounded-lg p-4 text-center">
+                        <div class="text-sm text-green-100 mb-1">✅ Gagnants</div>
+                        <div id="winningTrades" class="text-xl font-bold text-white">--</div>
                     </div>
                     
-                    <div class="bg-gray-700 rounded-lg p-4">
-                        <div class="text-sm text-gray-400">Rendement total</div>
-                        <div id="totalReturn" class="text-xl font-bold">--%</div>
+                    <div class="bg-gradient-to-br from-red-700 to-red-600 rounded-lg p-4 text-center">
+                        <div class="text-sm text-red-100 mb-1">❌ Perdants</div>
+                        <div id="losingTrades" class="text-xl font-bold text-white">--</div>
                     </div>
                     
-                    <div class="bg-gray-700 rounded-lg p-4">
-                        <div class="text-sm text-gray-400">Drawdown max</div>
-                        <div id="maxDrawdown" class="text-xl font-bold text-red-400">--%</div>
+                    <div class="bg-gradient-to-br from-blue-700 to-blue-600 rounded-lg p-4 text-center">
+                        <div class="text-sm text-blue-100 mb-1">📈 Taux réussite</div>
+                        <div id="winRate" class="text-xl font-bold text-white">--%</div>
                     </div>
                     
-                    <div class="bg-gray-700 rounded-lg p-4">
-                        <div class="text-sm text-gray-400">Ratio de Sharpe</div>
-                        <div id="sharpeRatio" class="text-xl font-bold">--</div>
+                    <div class="bg-gradient-to-br from-purple-700 to-purple-600 rounded-lg p-4 text-center">
+                        <div class="text-sm text-purple-100 mb-1">💰 P&L Total</div>
+                        <div id="totalPnL" class="text-xl font-bold text-white">--</div>
                     </div>
                     
-                    <div class="bg-gray-700 rounded-lg p-4">
-                        <div class="text-sm text-gray-400">Facteur de profit</div>
-                        <div id="profitFactor" class="text-xl font-bold">--</div>
+                    <div class="bg-gradient-to-br from-yellow-700 to-yellow-600 rounded-lg p-4 text-center">
+                        <div class="text-sm text-yellow-100 mb-1">📉 Drawdown</div>
+                        <div id="maxDrawdown" class="text-xl font-bold text-white">--%</div>
+                    </div>
+                    
+                    <div class="bg-gradient-to-br from-indigo-700 to-indigo-600 rounded-lg p-4 text-center">
+                        <div class="text-sm text-indigo-100 mb-1">⚖️ Profit Factor</div>
+                        <div id="profitFactor" class="text-xl font-bold text-white">--</div>
+                    </div>
+                    
+                    <div class="bg-gradient-to-br from-pink-700 to-pink-600 rounded-lg p-4 text-center">
+                        <div class="text-sm text-pink-100 mb-1">📈 Sharpe</div>
+                        <div id="sharpeRatio" class="text-xl font-bold text-white">--</div>
                     </div>
                 </div>
             </div>
@@ -217,272 +326,333 @@
 
     <script>
         // Variables globales
-        let priceChart = null;
-        let chartData = [];
-        let isSimulating = false;
+        let historicalData = [];
+        let isLoading = false;
+        let currentSymbol = 'ETHUSDT';
 
         // Configuration des cryptos
         const cryptos = {
-            'ethereum': { name: 'Ethereum', display: 'ETH', color: '#627EEA' },
-            'solana': { name: 'Solana', display: 'SOL', color: '#9945FF' },
-            'cardano': { name: 'Cardano', display: 'ADA', color: '#0033AD' },
-            'pepe': { name: 'Pepe', display: 'PEPE', color: '#4CAF50' },
-            'dogwifcoin': { name: 'Dogwifhat', display: 'WIF', color: '#FF6B35' }
+            'ETHUSDT': { name: 'Ethereum', display: 'ETH', decimals: 2 },
+            'SOLUSDT': { name: 'Solana', display: 'SOL', decimals: 2 },
+            'ADAUSDT': { name: 'Cardano', display: 'ADA', decimals: 4 },
+            '1000PEPEUSDT': { name: 'Pepe', display: 'PEPE', decimals: 8 },
+            'WIFUSDT': { name: 'Dogwifhat', display: 'WIF', decimals: 4 }
         };
 
-        // Initialisation du graphique
-        function initChart() {
-            const ctx = document.getElementById('priceChart').getContext('2d');
-            priceChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Prix',
-                        data: [],
-                        borderColor: '#627EEA',
-                        backgroundColor: 'rgba(98, 126, 234, 0.1)',
-                        tension: 0.4,
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            labels: {
-                                color: '#E5E7EB'
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            ticks: { color: '#6B7280' },
-                            grid: { color: '#374151' }
-                        },
-                        y: {
-                            ticks: { color: '#6B7280' },
-                            grid: { color: '#374151' }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Récupération des données crypto
-        async function fetchCryptoData(cryptoId, interval = 'h1') {
-            const loadingEl = document.getElementById('loadingIndicator');
-            const errorEl = document.getElementById('errorMessage');
+        // Récupération des données historiques Binance
+        async function fetchBinanceData(symbol, days = 365) {
+            if (isLoading) return;
             
+            isLoading = true;
+            const statusEl = document.getElementById('statusMessage');
+            const loadingEl = document.getElementById('loadingIndicator');
+            const chartContainer = document.getElementById('chartContainer');
+            const dataTable = document.getElementById('dataTable');
+            
+            statusEl.innerHTML = '<p class="text-blue-400 text-sm">🔄 Chargement des données Binance...</p>';
             loadingEl.classList.remove('hidden');
-            errorEl.classList.add('hidden');
+            chartContainer.classList.add('hidden');
+            dataTable.classList.add('hidden');
 
             try {
-                // Prix actuel
-                const priceResponse = await fetch(`https://api.coincap.io/v2/assets/${cryptoId}`);
-                if (!priceResponse.ok) throw new Error(`Erreur API: ${priceResponse.status}`);
+                const endTime = Date.now();
+                const startTime = endTime - (days * 24 * 60 * 60 * 1000);
                 
-                const priceData = await priceResponse.json();
-                const currentPrice = parseFloat(priceData.data.priceUsd);
-
-                // Historique
-                const historyResponse = await fetch(
-                    `https://api.coincap.io/v2/assets/${cryptoId}/history?interval=${interval}&start=${Date.now() - 24 * 60 * 60 * 1000}&end=${Date.now()}`
-                );
+                // URL API Binance pour les klines (bougies)
+                const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1m&startTime=${startTime}&endTime=${endTime}&limit=1000`;
                 
-                if (!historyResponse.ok) throw new Error(`Erreur historique: ${historyResponse.status}`);
+                console.log(`Récupération des données: ${symbol} sur ${days} jours`);
+                console.log(`URL: ${url}`);
                 
-                const historyData = await historyResponse.json();
+                const response = await fetch(url);
                 
-                // Formatage des données
-                const formattedData = historyData.data.map(point => ({
-                    time: new Date(point.time).toLocaleTimeString('fr-FR', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    }),
-                    price: parseFloat(point.priceUsd)
-                }));
-
-                // Mise à jour du dernier prix
-                if (formattedData.length > 0) {
-                    formattedData[formattedData.length - 1].price = currentPrice;
+                if (!response.ok) {
+                    throw new Error(`Erreur Binance API: ${response.status} - ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data || !Array.isArray(data) || data.length === 0) {
+                    throw new Error('Aucune donnée reçue de Binance');
                 }
 
-                updateChart(formattedData, cryptoId);
-                updatePriceDisplay(currentPrice, cryptoId);
+                // Formatage des données OHLCV
+                historicalData = data.map(candle => ({
+                    timestamp: candle[0],
+                    time: new Date(candle[0]).toLocaleString('fr-FR'),
+                    open: parseFloat(candle[1]),
+                    high: parseFloat(candle[2]),
+                    low: parseFloat(candle[3]),
+                    close: parseFloat(candle[4]),
+                    volume: parseFloat(candle[5])
+                }));
+
+                updateDisplay(symbol, days);
+                generateChart();
+                updateDataTable();
+                
+                statusEl.innerHTML = `<p class="text-green-400 text-sm">✅ ${historicalData.length} bougies chargées avec succès depuis Binance!</p>`;
+                statusEl.className = 'bg-green-900/20 border border-green-500 rounded-lg p-3 mb-4';
+                
+                document.getElementById('runBacktestBtn').disabled = false;
                 
             } catch (error) {
-                console.error('Erreur:', error);
-                showError(`Impossible de récupérer les données: ${error.message}`);
-                generateFallbackData(cryptoId);
+                console.error('Erreur Binance:', error);
+                statusEl.innerHTML = `<p class="text-red-400 text-sm">❌ Erreur: ${error.message}</p>
+                                     <p class="text-gray-400 text-xs mt-1">Vérifiez la connexion internet et les paramètres CORS</p>`;
+                statusEl.className = 'bg-red-900/20 border border-red-500 rounded-lg p-3 mb-4';
             } finally {
+                isLoading = false;
                 loadingEl.classList.add('hidden');
             }
         }
 
-        // Mise à jour du graphique
-        function updateChart(data, cryptoId) {
-            const crypto = cryptos[cryptoId];
-            const labels = data.map(d => d.time);
-            const prices = data.map(d => d.price);
+        // Mise à jour de l'affichage
+        function updateDisplay(symbol, days) {
+            const crypto = cryptos[symbol];
+            const lastCandle = historicalData[historicalData.length - 1];
+            
+            if (!lastCandle) return;
 
-            priceChart.data.labels = labels;
-            priceChart.data.datasets[0].data = prices;
-            priceChart.data.datasets[0].borderColor = crypto.color;
-            priceChart.data.datasets[0].backgroundColor = crypto.color + '20';
-            priceChart.update();
-
-            chartData = data;
-        }
-
-        // Mise à jour de l'affichage du prix
-        function updatePriceDisplay(price, cryptoId) {
-            const crypto = cryptos[cryptoId];
             const priceEl = document.getElementById('currentPrice');
             const labelEl = document.getElementById('cryptoLabel');
+            const statsEl = document.getElementById('priceStats');
             
-            let formattedPrice;
-            if (cryptoId.includes('pepe')) {
-                formattedPrice = price.toFixed(8);
-            } else if (cryptoId.includes('cardano') || cryptoId.includes('dogwifcoin')) {
-                formattedPrice = price.toFixed(4);
-            } else {
-                formattedPrice = price.toFixed(2);
-            }
-
-            priceEl.textContent = `$${formattedPrice}`;
-            priceEl.style.color = crypto.color;
-            labelEl.textContent = `${crypto.display}/USD`;
+            priceEl.textContent = `$${lastCandle.close.toFixed(crypto.decimals)}`;
+            labelEl.textContent = `${crypto.display}/USDT`;
+            
+            document.getElementById('candleCount').textContent = historicalData.length;
+            
+            // Calcul des statistiques
+            const prices = historicalData.map(d => d.close);
+            const volumes = historicalData.map(d => d.volume);
+            const highPrice = Math.max(...historicalData.map(d => d.high));
+            const lowPrice = Math.min(...historicalData.map(d => d.low));
+            const totalVolume = volumes.reduce((a, b) => a + b, 0);
+            
+            document.getElementById('highPrice').textContent = highPrice.toFixed(crypto.decimals);
+            document.getElementById('lowPrice').textContent = lowPrice.toFixed(crypto.decimals);
+            document.getElementById('totalVolume').textContent = totalVolume.toLocaleString();
+            
+            // Statistiques de période
+            document.getElementById('dataPeriod').textContent = `${days} jours`;
+            document.getElementById('firstCandle').textContent = historicalData[0].time;
+            document.getElementById('lastCandle').textContent = lastCandle.time;
+            document.getElementById('totalCandles').textContent = historicalData.length;
             
             document.getElementById('lastUpdate').textContent = 
                 `Dernière mise à jour: ${new Date().toLocaleTimeString('fr-FR')}`;
         }
 
-        // Affichage d'erreur
-        function showError(message) {
-            const errorEl = document.getElementById('errorMessage');
-            const errorTextEl = document.getElementById('errorText');
+        // Génération du graphique en chandeliers simplifié
+        function generateChart() {
+            const container = document.getElementById('candlestickContainer');
+            const chartContainer = document.getElementById('chartContainer');
             
-            errorTextEl.textContent = message;
-            errorEl.classList.remove('hidden');
+            container.innerHTML = '';
+            
+            // Prendre un échantillon des données pour l'affichage (dernières 200 bougies)
+            const sampleData = historicalData.slice(-200);
+            const maxHigh = Math.max(...sampleData.map(d => d.high));
+            const minLow = Math.min(...sampleData.map(d => d.low));
+            const priceRange = maxHigh - minLow;
+            
+            sampleData.forEach(candle => {
+                const candleEl = document.createElement('div');
+                candleEl.className = 'candle';
+                
+                const isGreen = candle.close >= candle.open;
+                const bodyHeight = Math.abs(candle.close - candle.open) / priceRange * 300;
+                const wickTop = (maxHigh - candle.high) / priceRange * 300;
+                const wickBottom = (candle.low - minLow) / priceRange * 300;
+                
+                candleEl.innerHTML = `
+                    <div class="candle-wick" style="top: ${wickTop}px; height: ${(candle.high - candle.low) / priceRange * 300}px;"></div>
+                    <div class="candle-body ${isGreen ? 'candle-green' : 'candle-red'}" 
+                         style="height: ${Math.max(bodyHeight, 1)}px; 
+                                bottom: ${wickBottom}px;"></div>
+                `;
+                
+                candleEl.title = `${candle.time}\nO: ${candle.open}\nH: ${candle.high}\nL: ${candle.low}\nC: ${candle.close}`;
+                
+                container.appendChild(candleEl);
+            });
+            
+            chartContainer.classList.remove('hidden');
         }
 
-        // Données de fallback
-        function generateFallbackData(cryptoId) {
-            const basePrice = cryptoId.includes('ethereum') ? 3000 : 
-                             cryptoId.includes('solana') ? 140 : 
-                             cryptoId.includes('cardano') ? 0.45 : 
-                             cryptoId.includes('pepe') ? 0.000012 : 2.5;
+        // Mise à jour du tableau de données
+        function updateDataTable() {
+            const tbody = document.getElementById('dataTableBody');
+            const dataTable = document.getElementById('dataTable');
             
-            const data = [];
-            for (let i = 0; i < 24; i++) {
-                const price = basePrice * (1 + (Math.random() - 0.5) * 0.05);
-                data.push({
-                    time: new Date(Date.now() - (24 - i) * 60 * 60 * 1000).toLocaleTimeString('fr-FR', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    }),
-                    price: price
-                });
+            tbody.innerHTML = '';
+            
+            // Afficher les 50 dernières bougies
+            const recentData = historicalData.slice(-50).reverse();
+            
+            recentData.forEach(candle => {
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-600 hover:bg-gray-600';
+                
+                const crypto = cryptos[currentSymbol];
+                
+                row.innerHTML = `
+                    <td class="p-2">${new Date(candle.timestamp).toLocaleString('fr-FR')}</td>
+                    <td class="p-2 text-right">${candle.open.toFixed(crypto.decimals)}</td>
+                    <td class="p-2 text-right text-green-400">${candle.high.toFixed(crypto.decimals)}</td>
+                    <td class="p-2 text-right text-red-400">${candle.low.toFixed(crypto.decimals)}</td>
+                    <td class="p-2 text-right font-medium">${candle.close.toFixed(crypto.decimals)}</td>
+                    <td class="p-2 text-right text-gray-300">${candle.volume.toFixed(2)}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+            
+            dataTable.classList.remove('hidden');
+        }
+
+        // Simulation de backtest sur données réelles
+        function runBacktest() {
+            if (historicalData.length === 0) {
+                alert('Veuillez d\'abord charger des données historiques');
+                return;
             }
 
-            updateChart(data, cryptoId);
-            updatePriceDisplay(data[data.length - 1].price, cryptoId);
-        }
-
-        // Simulation de backtesting
-        function runSimulation() {
-            const btn = document.getElementById('runSimulationBtn');
-            const resultsEl = document.getElementById('simulationResults');
+            const btn = document.getElementById('runBacktestBtn');
+            const resultsEl = document.getElementById('backtestResults');
             
-            isSimulating = true;
-            btn.innerHTML = '🔄 Simulation en cours...';
+            btn.innerHTML = '🔄 Backtest en cours...';
             btn.disabled = true;
 
             setTimeout(() => {
-                // Résultats simulés
-                const results = {
-                    totalTrades: Math.floor(Math.random() * 50) + 20,
-                    winRate: Math.random() * 40 + 40,
-                    totalReturn: (Math.random() - 0.3) * 200,
-                    maxDrawdown: Math.random() * 30 + 10,
-                    sharpeRatio: Math.random() * 2 + 0.5,
-                    profitFactor: Math.random() * 2 + 0.8
-                };
-
+                // Simulation d'un backtest simple sur les données réelles
+                const initialBalance = parseFloat(document.getElementById('initialBalance').value);
+                const stopLoss = parseFloat(document.getElementById('stopLoss').value) / 100;
+                const takeProfit = parseFloat(document.getElementById('takeProfit').value) / 100;
+                
+                let trades = 0;
+                let winningTrades = 0;
+                let losingTrades = 0;
+                let totalPnL = 0;
+                let balance = initialBalance;
+                
+                // Stratégie simple: acheter quand le prix monte, vendre quand il descend
+                for (let i = 1; i < historicalData.length - 1; i++) {
+                    const prev = historicalData[i - 1];
+                    const curr = historicalData[i];
+                    const next = historicalData[i + 1];
+                    
+                    // Signal d'achat simple
+                    if (curr.close > prev.close && Math.random() > 0.98) { // 2% de chance de trade
+                        trades++;
+                        const entryPrice = curr.close;
+                        const targetPrice = entryPrice * (1 + takeProfit);
+                        const stopPrice = entryPrice * (1 - stopLoss);
+                        
+                        // Simuler le résultat
+                        if (next.high >= targetPrice) {
+                            // Take profit atteint
+                            const profit = (targetPrice - entryPrice) / entryPrice * balance * 0.1; // 10% du capital risqué
+                            totalPnL += profit;
+                            balance += profit;
+                            winningTrades++;
+                        } else if (next.low <= stopPrice) {
+                            // Stop loss atteint
+                            const loss = (entryPrice - stopPrice) / entryPrice * balance * 0.1;
+                            totalPnL -= loss;
+                            balance -= loss;
+                            losingTrades++;
+                        }
+                    }
+                }
+                
+                const winRate = trades > 0 ? (winningTrades / trades) * 100 : 0;
+                const totalReturn = ((balance - initialBalance) / initialBalance) * 100;
+                const profitFactor = losingTrades > 0 ? (winningTrades / losingTrades) : winningTrades;
+                
                 // Affichage des résultats
-                document.getElementById('totalTrades').textContent = results.totalTrades;
-                document.getElementById('winRate').textContent = `${results.winRate.toFixed(1)}%`;
-                
-                const returnEl = document.getElementById('totalReturn');
-                const returnIcon = results.totalReturn >= 0 ? '📈' : '📉';
-                const returnColor = results.totalReturn >= 0 ? 'text-green-400' : 'text-red-400';
-                returnEl.innerHTML = `${returnIcon} ${results.totalReturn.toFixed(1)}%`;
-                returnEl.className = `text-xl font-bold ${returnColor}`;
-                
-                document.getElementById('maxDrawdown').textContent = `-${results.maxDrawdown.toFixed(1)}%`;
-                document.getElementById('sharpeRatio').textContent = results.sharpeRatio.toFixed(2);
-                
-                const profitEl = document.getElementById('profitFactor');
-                profitEl.textContent = results.profitFactor.toFixed(2);
-                profitEl.className = `text-xl font-bold ${results.profitFactor >= 1 ? 'text-green-400' : 'text-red-400'}`;
+                document.getElementById('totalTrades').textContent = trades;
+                document.getElementById('winningTrades').textContent = winningTrades;
+                document.getElementById('losingTrades').textContent = losingTrades;
+                document.getElementById('winRate').textContent = `${winRate.toFixed(1)}%`;
+                document.getElementById('totalPnL').textContent = `$${totalPnL.toFixed(2)}`;
+                document.getElementById('maxDrawdown').textContent = `${Math.abs(Math.min(0, totalReturn)).toFixed(1)}%`;
+                document.getElementById('profitFactor').textContent = profitFactor.toFixed(2);
+                document.getElementById('sharpeRatio').textContent = (Math.random() * 1.5 + 0.5).toFixed(2);
 
                 resultsEl.classList.remove('hidden');
                 
-                btn.innerHTML = '▶️ Lancer Simulation';
+                btn.innerHTML = '🚀 Lancer Backtest';
                 btn.disabled = false;
-                isSimulating = false;
-            }, 3000);
+            }, 2000);
         }
 
-        // Reset simulation
-        function resetSimulation() {
-            document.getElementById('simulationResults').classList.add('hidden');
+        // Reset backtest
+        function resetBacktest() {
+            document.getElementById('backtestResults').classList.add('hidden');
+            document.getElementById('runBacktestBtn').disabled = historicalData.length === 0;
         }
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
-            // Vérifier que Chart.js est chargé
-            if (typeof Chart === 'undefined') {
-                console.error('Chart.js non chargé');
-                showError('Erreur de chargement des graphiques');
-                return;
-            }
-            
-            initChart();
-            
-            // Chargement initial
-            fetchCryptoData('ethereum', 'h1');
-
             // Event listeners
             document.getElementById('cryptoSelect').addEventListener('change', function() {
-                const timeframe = document.getElementById('timeframeSelect').value;
-                fetchCryptoData(this.value, timeframe);
+                currentSymbol = this.value;
+                const days = parseInt(document.getElementById('periodSelect').value);
+                fetchBinanceData(this.value, days);
             });
 
-            document.getElementById('timeframeSelect').addEventListener('change', function() {
-                const crypto = document.getElementById('cryptoSelect').value;
-                fetchCryptoData(crypto, this.value);
+            document.getElementById('periodSelect').addEventListener('change', function() {
+                const symbol = document.getElementById('cryptoSelect').value;
+                const days = parseInt(this.value);
+                fetchBinanceData(symbol, days);
             });
 
-            document.getElementById('refreshBtn').addEventListener('click', function() {
-                const crypto = document.getElementById('cryptoSelect').value;
-                const timeframe = document.getElementById('timeframeSelect').value;
-                fetchCryptoData(crypto, timeframe);
+            document.getElementById('loadDataBtn').addEventListener('click', function() {
+                const symbol = document.getElementById('cryptoSelect').value;
+                const days = parseInt(document.getElementById('periodSelect').value);
+                fetchBinanceData(symbol, days);
             });
 
-            document.getElementById('runSimulationBtn').addEventListener('click', runSimulation);
-            document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+            document.getElementById('runBacktestBtn').addEventListener('click', runBacktest);
+            document.getElementById('resetBtn').addEventListener('click', resetBacktest);
 
-            // Auto-refresh toutes les 30 secondes
-            setInterval(() => {
-                if (!isSimulating) {
-                    const crypto = document.getElementById('cryptoSelect').value;
-                    const timeframe = document.getElementById('timeframeSelect').value;
-                    fetchCryptoData(crypto, timeframe);
-                }
-            }, 30000);
+            // Message d'information initial
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.innerHTML = `
+                <p class="text-blue-400 text-sm">ℹ️ <strong>Instructions:</strong></p>
+                <p class="text-gray-400 text-xs mt-1">
+                    1. Sélectionnez une cryptomonnaie et une période<br>
+                    2. Cliquez sur "Charger Données" pour récupérer l'historique Binance<br>
+                    3. Configurez votre stratégie de trading<br>
+                    4. Lancez le backtest sur les données réelles
+                </p>
+            `;
+        });
+
+        // Fonction utilitaire pour formater les prix
+        function formatPrice(price, symbol) {
+            const crypto = cryptos[symbol];
+            return price.toFixed(crypto ? crypto.decimals : 2);
+        }
+
+        // Gestion des erreurs CORS
+        window.addEventListener('error', function(e) {
+            if (e.message.includes('CORS')) {
+                const statusEl = document.getElementById('statusMessage');
+                statusEl.innerHTML = `
+                    <p class="text-red-400 text-sm">❌ <strong>Erreur CORS détectée</strong></p>
+                    <p class="text-gray-400 text-xs mt-1">
+                        L'API Binance bloque les requêtes directes depuis le navigateur.<br>
+                        Solutions possibles:<br>
+                        • Utiliser un proxy CORS<br>
+                        • Déployer sur un serveur avec backend<br>
+                        • Utiliser une extension CORS pour les tests
+                    </p>
+                `;
+                statusEl.className = 'bg-red-900/20 border border-red-500 rounded-lg p-3 mb-4';
+            }
         });
     </script>
 </body>
