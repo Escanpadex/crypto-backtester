@@ -4,503 +4,486 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crypto Backtester</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/recharts@2.8.0/esm/index.js" type="module"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide-react/0.263.1/lucide-react.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         body {
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background-color: #111827;
+            color: white;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
         }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div class="min-h-screen bg-gray-900 text-white p-6">
+        <div class="max-w-7xl mx-auto">
+            <!-- Header -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold mb-2">🚀 Backtester Crypto</h1>
+                <p class="text-gray-400">Testez vos stratégies de trading sur les principales cryptomonnaies</p>
+            </div>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = Recharts;
-
-        const CryptoBacktester = () => {
-            const [selectedCrypto, setSelectedCrypto] = useState('ethereum');
-            const [timeframe, setTimeframe] = useState('h1');
-            const [isSimulating, setIsSimulating] = useState(false);
-            const [simulationResults, setSimulationResults] = useState(null);
-            const [chartData, setChartData] = useState([]);
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState(null);
-            
-            // Configuration de la simulation
-            const [config, setConfig] = useState({
-                initialBalance: 10000,
-                riskPerTrade: 2,
-                stopLoss: 5,
-                takeProfit: 10,
-                strategy: 'sma_crossover',
-                smaShort: 20,
-                smaLong: 50,
-                rsiPeriod: 14,
-                rsiOverbought: 70,
-                rsiOversold: 30
-            });
-
-            // Configuration des cryptos, stratégies et timeframes
-            const cryptos = [
-                { symbol: 'ethereum', name: 'Ethereum', display: 'ETH', color: '#627EEA' },
-                { symbol: 'solana', name: 'Solana', display: 'SOL', color: '#9945FF' },
-                { symbol: 'cardano', name: 'Cardano', display: 'ADA', color: '#0033AD' },
-                { symbol: 'pepe', name: 'Pepe', display: 'PEPE', color: '#4CAF50' },
-                { symbol: 'dogwifcoin', name: 'Dogwifhat', display: 'WIF', color: '#FF6B35' }
-            ];
-
-            const strategies = [
-                { value: 'sma_crossover', name: 'SMA Crossover' },
-                { value: 'rsi_strategy', name: 'RSI Strategy' },
-                { value: 'macd_strategy', name: 'MACD Strategy' },
-                { value: 'bollinger_bands', name: 'Bollinger Bands' }
-            ];
-
-            const timeframes = [
-                { value: 'm1', label: '1m' },
-                { value: 'm5', label: '5m' },
-                { value: 'm15', label: '15m' },
-                { value: 'h1', label: '1h' },
-                { value: 'h4', label: '4h' },
-                { value: 'd1', label: '1d' }
-            ];
-
-            // Fonction pour récupérer les données depuis l'API CoinCap
-            const fetchCryptoData = async (cryptoId, interval = 'h1') => {
-                setLoading(true);
-                setError(null);
-                
-                try {
-                    // Récupération du prix actuel
-                    const priceResponse = await fetch(`https://api.coincap.io/v2/assets/${cryptoId}`);
-                    
-                    if (!priceResponse.ok) {
-                        throw new Error(`Erreur API: ${priceResponse.status}`);
-                    }
-                    
-                    const priceData = await priceResponse.json();
-                    const currentPrice = parseFloat(priceData.data.priceUsd);
-                    
-                    // Récupération de l'historique (24h avec intervalles)
-                    const historyResponse = await fetch(
-                        `https://api.coincap.io/v2/assets/${cryptoId}/history?interval=${interval}&start=${Date.now() - 24 * 60 * 60 * 1000}&end=${Date.now()}`
-                    );
-                    
-                    if (!historyResponse.ok) {
-                        throw new Error(`Erreur historique: ${historyResponse.status}`);
-                    }
-                    
-                    const historyData = await historyResponse.json();
-                    
-                    const formattedData = historyData.data.map((point) => ({
-                        time: new Date(point.time).toLocaleTimeString('fr-FR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit',
-                            day: interval.includes('d') ? '2-digit' : undefined,
-                            month: interval.includes('d') ? '2-digit' : undefined
-                        }),
-                        timestamp: point.time,
-                        price: parseFloat(point.priceUsd),
-                        volume: Math.random() * 1000000
-                    }));
-                    
-                    // Ajout du prix actuel comme dernier point
-                    if (formattedData.length > 0) {
-                        formattedData[formattedData.length - 1].price = currentPrice;
-                    }
-                    
-                    setChartData(formattedData);
-                } catch (err) {
-                    console.error('Erreur lors de la récupération des données:', err);
-                    setError(`Impossible de récupérer les données: ${err.message}`);
-                    // Fallback vers des données simulées
-                    setChartData(generateFallbackData(cryptoId));
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            // Données de fallback en cas d'erreur de l'API
-            const generateFallbackData = (cryptoId) => {
-                const data = [];
-                const basePrice = cryptoId.includes('ethereum') ? 3000 : 
-                                cryptoId.includes('solana') ? 140 : 
-                                cryptoId.includes('cardano') ? 0.45 : 
-                                cryptoId.includes('pepe') ? 0.000012 : 2.5;
-                
-                const now = Date.now();
-                for (let i = 0; i < 24; i++) {
-                    const timestamp = now - (24 - i) * 60 * 60 * 1000;
-                    const price = basePrice * (1 + (Math.random() - 0.5) * 0.05);
-                    data.push({
-                        time: new Date(timestamp).toLocaleTimeString('fr-FR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                        }),
-                        timestamp: timestamp,
-                        price: price,
-                        volume: Math.random() * 1000000
-                    });
-                }
-                return data;
-            };
-
-            // Récupération des données au chargement et changement de crypto/timeframe
-            useEffect(() => {
-                fetchCryptoData(selectedCrypto, timeframe);
-            }, [selectedCrypto, timeframe]);
-
-            // Actualisation automatique toutes les 30 secondes
-            useEffect(() => {
-                const interval = setInterval(() => {
-                    if (!isSimulating) {
-                        fetchCryptoData(selectedCrypto, timeframe);
-                    }
-                }, 30000);
-
-                return () => clearInterval(interval);
-            }, [selectedCrypto, timeframe, isSimulating]);
-
-            const runSimulation = () => {
-                setIsSimulating(true);
-                
-                // Simulation des résultats
-                setTimeout(() => {
-                    const mockResults = {
-                        totalTrades: Math.floor(Math.random() * 50) + 20,
-                        winRate: Math.random() * 40 + 40,
-                        totalReturn: (Math.random() - 0.3) * 200,
-                        maxDrawdown: Math.random() * 30 + 10,
-                        sharpeRatio: Math.random() * 2 + 0.5,
-                        profitFactor: Math.random() * 2 + 0.8
-                    };
-                    
-                    setSimulationResults(mockResults);
-                    setIsSimulating(false);
-                }, 3000);
-            };
-
-            const resetSimulation = () => {
-                setSimulationResults(null);
-                setIsSimulating(false);
-            };
-
-            const getCurrentCrypto = () => cryptos.find(c => c.symbol === selectedCrypto);
-
-            // Fonction pour formater le prix selon la crypto
-            const formatPrice = (price) => {
-                if (!price) return '0.0000';
-                if (selectedCrypto.includes('pepe')) {
-                    return price.toFixed(8);
-                } else if (selectedCrypto.includes('cardano') || selectedCrypto.includes('dogwifcoin')) {
-                    return price.toFixed(4);
-                } else {
-                    return price.toFixed(2);
-                }
-            };
-
-            return React.createElement('div', {
-                className: "min-h-screen bg-gray-900 text-white p-6"
-            }, 
-                React.createElement('div', {
-                    className: "max-w-7xl mx-auto"
-                },
-                    // Header
-                    React.createElement('div', {
-                        className: "mb-8"
-                    },
-                        React.createElement('h1', {
-                            className: "text-3xl font-bold mb-2"
-                        }, "Backtester Crypto"),
-                        React.createElement('p', {
-                            className: "text-gray-400"
-                        }, "Testez vos stratégies de trading sur les principales cryptomonnaies")
-                    ),
-
-                    React.createElement('div', {
-                        className: "grid grid-cols-1 lg:grid-cols-3 gap-6"
-                    },
-                        // Graphique principal
-                        React.createElement('div', {
-                            className: "lg:col-span-2 bg-gray-800 rounded-lg p-6"
-                        },
-                            React.createElement('div', {
-                                className: "flex items-center justify-between mb-4"
-                            },
-                                React.createElement('div', {
-                                    className: "flex items-center space-x-4"
-                                },
-                                    React.createElement('select', {
-                                        value: selectedCrypto,
-                                        onChange: (e) => setSelectedCrypto(e.target.value),
-                                        className: "bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white",
-                                        disabled: loading
-                                    }, 
-                                        cryptos.map(crypto => 
-                                            React.createElement('option', {
-                                                key: crypto.symbol,
-                                                value: crypto.symbol
-                                            }, `${crypto.name} (${crypto.display})`)
-                                        )
-                                    ),
-                                    
-                                    React.createElement('select', {
-                                        value: timeframe,
-                                        onChange: (e) => setTimeframe(e.target.value),
-                                        className: "bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white",
-                                        disabled: loading
-                                    },
-                                        timeframes.map(tf => 
-                                            React.createElement('option', {
-                                                key: tf.value,
-                                                value: tf.value
-                                            }, tf.label)
-                                        )
-                                    ),
-                                    
-                                    React.createElement('button', {
-                                        onClick: () => fetchCryptoData(selectedCrypto, timeframe),
-                                        disabled: loading,
-                                        className: "bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-3 py-2 rounded-lg text-sm"
-                                    }, loading ? 'Chargement...' : 'Actualiser')
-                                ),
-                                
-                                React.createElement('div', {
-                                    className: "text-right"
-                                },
-                                    React.createElement('div', {
-                                        className: "text-2xl font-bold",
-                                        style: {color: getCurrentCrypto()?.color}
-                                    }, `$${formatPrice(chartData.length > 0 ? chartData[chartData.length - 1]?.price : 0)}`),
-                                    React.createElement('div', {
-                                        className: "text-sm text-gray-400"
-                                    }, `${getCurrentCrypto()?.display}/USD${loading ? ' ⟲' : ''}`)
-                                )
-                            ),
-
-                            error && React.createElement('div', {
-                                className: "bg-red-900/20 border border-red-500 rounded-lg p-3 mb-4"
-                            },
-                                React.createElement('p', {
-                                    className: "text-red-400 text-sm"
-                                }, error),
-                                React.createElement('p', {
-                                    className: "text-gray-400 text-xs mt-1"
-                                }, "Utilisation de données simulées")
-                            ),
-
-                            React.createElement('div', {
-                                className: "h-96"
-                            },
-                                loading ? 
-                                    React.createElement('div', {
-                                        className: "flex items-center justify-center h-full"
-                                    },
-                                        React.createElement('div', {
-                                            className: "animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"
-                                        }),
-                                        React.createElement('span', {
-                                            className: "ml-3 text-gray-400"
-                                        }, "Chargement des données...")
-                                    ) :
-                                    React.createElement('div', {
-                                        style: { width: '100%', height: '100%' }
-                                    }, "Graphique des prix - " + getCurrentCrypto()?.display)
-                            ),
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Graphique principal -->
+                <div class="lg:col-span-2 bg-gray-800 rounded-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-4">
+                            <select 
+                                id="cryptoSelect"
+                                class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                            >
+                                <option value="ethereum">Ethereum (ETH)</option>
+                                <option value="solana">Solana (SOL)</option>
+                                <option value="cardano">Cardano (ADA)</option>
+                                <option value="pepe">Pepe (PEPE)</option>
+                                <option value="dogwifcoin">Dogwifhat (WIF)</option>
+                            </select>
                             
-                            React.createElement('div', {
-                                className: "mt-4 text-xs text-gray-500 flex justify-between items-center"
-                            },
-                                React.createElement('span', {}, "Données fournies par CoinCap API"),
-                                React.createElement('span', {}, `Dernière mise à jour: ${new Date().toLocaleTimeString('fr-FR')}`)
-                            )
-                        ),
-
-                        // Configuration
-                        React.createElement('div', {
-                            className: "bg-gray-800 rounded-lg p-6"
-                        },
-                            React.createElement('div', {
-                                className: "flex items-center mb-4"
-                            },
-                                React.createElement('h2', {
-                                    className: "text-xl font-semibold"
-                                }, "⚙️ Configuration")
-                            ),
-
-                            React.createElement('div', {
-                                className: "space-y-4"
-                            },
-                                React.createElement('div', {},
-                                    React.createElement('label', {
-                                        className: "block text-sm font-medium mb-1"
-                                    }, "Capital initial ($)"),
-                                    React.createElement('input', {
-                                        type: "number",
-                                        value: config.initialBalance,
-                                        onChange: (e) => setConfig({...config, initialBalance: parseFloat(e.target.value)}),
-                                        className: "w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
-                                    })
-                                ),
-
-                                React.createElement('div', {},
-                                    React.createElement('label', {
-                                        className: "block text-sm font-medium mb-1"
-                                    }, "Stratégie"),
-                                    React.createElement('select', {
-                                        value: config.strategy,
-                                        onChange: (e) => setConfig({...config, strategy: e.target.value}),
-                                        className: "w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
-                                    },
-                                        strategies.map(strategy => 
-                                            React.createElement('option', {
-                                                key: strategy.value,
-                                                value: strategy.value
-                                            }, strategy.name)
-                                        )
-                                    )
-                                ),
-
-                                React.createElement('div', {
-                                    className: "grid grid-cols-2 gap-2"
-                                },
-                                    React.createElement('div', {},
-                                        React.createElement('label', {
-                                            className: "block text-sm font-medium mb-1"
-                                        }, "Stop Loss (%)"),
-                                        React.createElement('input', {
-                                            type: "number",
-                                            value: config.stopLoss,
-                                            onChange: (e) => setConfig({...config, stopLoss: parseFloat(e.target.value)}),
-                                            className: "w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
-                                        })
-                                    ),
-                                    React.createElement('div', {},
-                                        React.createElement('label', {
-                                            className: "block text-sm font-medium mb-1"
-                                        }, "Take Profit (%)"),
-                                        React.createElement('input', {
-                                            type: "number",
-                                            value: config.takeProfit,
-                                            onChange: (e) => setConfig({...config, takeProfit: parseFloat(e.target.value)}),
-                                            className: "w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
-                                        })
-                                    )
-                                ),
-
-                                React.createElement('div', {
-                                    className: "flex space-x-2 mt-6"
-                                },
-                                    React.createElement('button', {
-                                        onClick: runSimulation,
-                                        disabled: isSimulating,
-                                        className: "flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-4 py-2 rounded-lg flex items-center justify-center"
-                                    },
-                                        isSimulating ? 
-                                            React.createElement('span', {}, "🔄 Simulation...") :
-                                            React.createElement('span', {}, "▶️ Lancer")
-                                    ),
-                                    
-                                    React.createElement('button', {
-                                        onClick: resetSimulation,
-                                        className: "bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg"
-                                    }, "🔄")
-                                )
-                            )
-                        )
-                    ),
-
-                    // Résultats de la simulation
-                    simulationResults && React.createElement('div', {
-                        className: "mt-6 bg-gray-800 rounded-lg p-6"
-                    },
-                        React.createElement('h2', {
-                            className: "text-xl font-semibold mb-4"
-                        }, "📊 Résultats de la Simulation"),
+                            <select 
+                                id="timeframeSelect"
+                                class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                            >
+                                <option value="m1">1m</option>
+                                <option value="m5">5m</option>
+                                <option value="m15">15m</option>
+                                <option value="h1" selected>1h</option>
+                                <option value="h4">4h</option>
+                                <option value="d1">1d</option>
+                            </select>
+                            
+                            <button
+                                id="refreshBtn"
+                                class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm"
+                            >
+                                🔄 Actualiser
+                            </button>
+                        </div>
                         
-                        React.createElement('div', {
-                            className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
-                        },
-                            React.createElement('div', {
-                                className: "bg-gray-700 rounded-lg p-4"
-                            },
-                                React.createElement('div', {
-                                    className: "text-sm text-gray-400"
-                                }, "Nombre de trades"),
-                                React.createElement('div', {
-                                    className: "text-xl font-bold"
-                                }, simulationResults.totalTrades)
-                            ),
+                        <div class="text-right">
+                            <div id="currentPrice" class="text-2xl font-bold text-blue-400">
+                                $0.00
+                            </div>
+                            <div id="cryptoLabel" class="text-sm text-gray-400">
+                                ETH/USD
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="errorMessage" class="bg-red-900/20 border border-red-500 rounded-lg p-3 mb-4 hidden">
+                        <p class="text-red-400 text-sm" id="errorText"></p>
+                        <p class="text-gray-400 text-xs mt-1">Utilisation de données simulées</p>
+                    </div>
+
+                    <div id="loadingIndicator" class="flex items-center justify-center h-96 hidden">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                        <span class="ml-3 text-gray-400">Chargement des données...</span>
+                    </div>
+
+                    <div class="chart-container">
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                    
+                    <div class="mt-4 text-xs text-gray-500 flex justify-between items-center">
+                        <span>📊 Données fournies par CoinCap API</span>
+                        <span id="lastUpdate">Dernière mise à jour: --:--</span>
+                    </div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="bg-gray-800 rounded-lg p-6">
+                    <div class="flex items-center mb-4">
+                        <h2 class="text-xl font-semibold">⚙️ Configuration</h2>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Capital initial ($)</label>
+                            <input
+                                type="number"
+                                id="initialBalance"
+                                value="10000"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Stratégie</label>
+                            <select
+                                id="strategy"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                            >
+                                <option value="sma_crossover">SMA Crossover</option>
+                                <option value="rsi_strategy">RSI Strategy</option>
+                                <option value="macd_strategy">MACD Strategy</option>
+                                <option value="bollinger_bands">Bollinger Bands</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Stop Loss (%)</label>
+                                <input
+                                    type="number"
+                                    id="stopLoss"
+                                    value="5"
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Take Profit (%)</label>
+                                <input
+                                    type="number"
+                                    id="takeProfit"
+                                    value="10"
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Risque par trade (%)</label>
+                            <input
+                                type="number"
+                                id="riskPerTrade"
+                                value="2"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                            />
+                        </div>
+
+                        <div class="flex space-x-2 mt-6">
+                            <button
+                                id="runSimulationBtn"
+                                class="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg flex items-center justify-center"
+                            >
+                                ▶️ Lancer Simulation
+                            </button>
                             
-                            React.createElement('div', {
-                                className: "bg-gray-700 rounded-lg p-4"
-                            },
-                                React.createElement('div', {
-                                    className: "text-sm text-gray-400"
-                                }, "Taux de réussite"),
-                                React.createElement('div', {
-                                    className: "text-xl font-bold text-green-400"
-                                }, `${simulationResults.winRate.toFixed(1)}%`)
-                            ),
-                            
-                            React.createElement('div', {
-                                className: "bg-gray-700 rounded-lg p-4"
-                            },
-                                React.createElement('div', {
-                                    className: "text-sm text-gray-400"
-                                }, "Rendement total"),
-                                React.createElement('div', {
-                                    className: `text-xl font-bold ${simulationResults.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`
-                                }, `${simulationResults.totalReturn >= 0 ? '📈' : '📉'} ${simulationResults.totalReturn.toFixed(1)}%`)
-                            ),
-                            
-                            React.createElement('div', {
-                                className: "bg-gray-700 rounded-lg p-4"
-                            },
-                                React.createElement('div', {
-                                    className: "text-sm text-gray-400"
-                                }, "Drawdown max"),
-                                React.createElement('div', {
-                                    className: "text-xl font-bold text-red-400"
-                                }, `-${simulationResults.maxDrawdown.toFixed(1)}%`)
-                            ),
-                            
-                            React.createElement('div', {
-                                className: "bg-gray-700 rounded-lg p-4"
-                            },
-                                React.createElement('div', {
-                                    className: "text-sm text-gray-400"
-                                }, "Ratio de Sharpe"),
-                                React.createElement('div', {
-                                    className: "text-xl font-bold"
-                                }, simulationResults.sharpeRatio.toFixed(2))
-                            ),
-                            
-                            React.createElement('div', {
-                                className: "bg-gray-700 rounded-lg p-4"
-                            },
-                                React.createElement('div', {
-                                    className: "text-sm text-gray-400"
-                                }, "Facteur de profit"),
-                                React.createElement('div', {
-                                    className: `text-xl font-bold ${simulationResults.profitFactor >= 1 ? 'text-green-400' : 'text-red-400'}`
-                                }, simulationResults.profitFactor.toFixed(2))
-                            )
-                        )
-                    )
-                )
-            );
+                            <button
+                                id="resetBtn"
+                                class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg"
+                            >
+                                🔄
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Résultats de la simulation -->
+            <div id="simulationResults" class="mt-6 bg-gray-800 rounded-lg p-6 hidden">
+                <h2 class="text-xl font-semibold mb-4">📊 Résultats de la Simulation</h2>
+                
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="text-sm text-gray-400">Nombre de trades</div>
+                        <div id="totalTrades" class="text-xl font-bold">--</div>
+                    </div>
+                    
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="text-sm text-gray-400">Taux de réussite</div>
+                        <div id="winRate" class="text-xl font-bold text-green-400">--%</div>
+                    </div>
+                    
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="text-sm text-gray-400">Rendement total</div>
+                        <div id="totalReturn" class="text-xl font-bold">--%</div>
+                    </div>
+                    
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="text-sm text-gray-400">Drawdown max</div>
+                        <div id="maxDrawdown" class="text-xl font-bold text-red-400">--%</div>
+                    </div>
+                    
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="text-sm text-gray-400">Ratio de Sharpe</div>
+                        <div id="sharpeRatio" class="text-xl font-bold">--</div>
+                    </div>
+                    
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="text-sm text-gray-400">Facteur de profit</div>
+                        <div id="profitFactor" class="text-xl font-bold">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let priceChart = null;
+        let chartData = [];
+        let isSimulating = false;
+
+        // Configuration des cryptos
+        const cryptos = {
+            'ethereum': { name: 'Ethereum', display: 'ETH', color: '#627EEA' },
+            'solana': { name: 'Solana', display: 'SOL', color: '#9945FF' },
+            'cardano': { name: 'Cardano', display: 'ADA', color: '#0033AD' },
+            'pepe': { name: 'Pepe', display: 'PEPE', color: '#4CAF50' },
+            'dogwifcoin': { name: 'Dogwifhat', display: 'WIF', color: '#FF6B35' }
         };
 
-        ReactDOM.render(React.createElement(CryptoBacktester), document.getElementById('root'));
+        // Initialisation du graphique
+        function initChart() {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Prix',
+                        data: [],
+                        borderColor: '#627EEA',
+                        backgroundColor: 'rgba(98, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#E5E7EB'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#6B7280' },
+                            grid: { color: '#374151' }
+                        },
+                        y: {
+                            ticks: { color: '#6B7280' },
+                            grid: { color: '#374151' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Récupération des données crypto
+        async function fetchCryptoData(cryptoId, interval = 'h1') {
+            const loadingEl = document.getElementById('loadingIndicator');
+            const errorEl = document.getElementById('errorMessage');
+            
+            loadingEl.classList.remove('hidden');
+            errorEl.classList.add('hidden');
+
+            try {
+                // Prix actuel
+                const priceResponse = await fetch(`https://api.coincap.io/v2/assets/${cryptoId}`);
+                if (!priceResponse.ok) throw new Error(`Erreur API: ${priceResponse.status}`);
+                
+                const priceData = await priceResponse.json();
+                const currentPrice = parseFloat(priceData.data.priceUsd);
+
+                // Historique
+                const historyResponse = await fetch(
+                    `https://api.coincap.io/v2/assets/${cryptoId}/history?interval=${interval}&start=${Date.now() - 24 * 60 * 60 * 1000}&end=${Date.now()}`
+                );
+                
+                if (!historyResponse.ok) throw new Error(`Erreur historique: ${historyResponse.status}`);
+                
+                const historyData = await historyResponse.json();
+                
+                // Formatage des données
+                const formattedData = historyData.data.map(point => ({
+                    time: new Date(point.time).toLocaleTimeString('fr-FR', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    }),
+                    price: parseFloat(point.priceUsd)
+                }));
+
+                // Mise à jour du dernier prix
+                if (formattedData.length > 0) {
+                    formattedData[formattedData.length - 1].price = currentPrice;
+                }
+
+                updateChart(formattedData, cryptoId);
+                updatePriceDisplay(currentPrice, cryptoId);
+                
+            } catch (error) {
+                console.error('Erreur:', error);
+                showError(`Impossible de récupérer les données: ${error.message}`);
+                generateFallbackData(cryptoId);
+            } finally {
+                loadingEl.classList.add('hidden');
+            }
+        }
+
+        // Mise à jour du graphique
+        function updateChart(data, cryptoId) {
+            const crypto = cryptos[cryptoId];
+            const labels = data.map(d => d.time);
+            const prices = data.map(d => d.price);
+
+            priceChart.data.labels = labels;
+            priceChart.data.datasets[0].data = prices;
+            priceChart.data.datasets[0].borderColor = crypto.color;
+            priceChart.data.datasets[0].backgroundColor = crypto.color + '20';
+            priceChart.update();
+
+            chartData = data;
+        }
+
+        // Mise à jour de l'affichage du prix
+        function updatePriceDisplay(price, cryptoId) {
+            const crypto = cryptos[cryptoId];
+            const priceEl = document.getElementById('currentPrice');
+            const labelEl = document.getElementById('cryptoLabel');
+            
+            let formattedPrice;
+            if (cryptoId.includes('pepe')) {
+                formattedPrice = price.toFixed(8);
+            } else if (cryptoId.includes('cardano') || cryptoId.includes('dogwifcoin')) {
+                formattedPrice = price.toFixed(4);
+            } else {
+                formattedPrice = price.toFixed(2);
+            }
+
+            priceEl.textContent = `$${formattedPrice}`;
+            priceEl.style.color = crypto.color;
+            labelEl.textContent = `${crypto.display}/USD`;
+            
+            document.getElementById('lastUpdate').textContent = 
+                `Dernière mise à jour: ${new Date().toLocaleTimeString('fr-FR')}`;
+        }
+
+        // Affichage d'erreur
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            const errorTextEl = document.getElementById('errorText');
+            
+            errorTextEl.textContent = message;
+            errorEl.classList.remove('hidden');
+        }
+
+        // Données de fallback
+        function generateFallbackData(cryptoId) {
+            const basePrice = cryptoId.includes('ethereum') ? 3000 : 
+                             cryptoId.includes('solana') ? 140 : 
+                             cryptoId.includes('cardano') ? 0.45 : 
+                             cryptoId.includes('pepe') ? 0.000012 : 2.5;
+            
+            const data = [];
+            for (let i = 0; i < 24; i++) {
+                const price = basePrice * (1 + (Math.random() - 0.5) * 0.05);
+                data.push({
+                    time: new Date(Date.now() - (24 - i) * 60 * 60 * 1000).toLocaleTimeString('fr-FR', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    }),
+                    price: price
+                });
+            }
+
+            updateChart(data, cryptoId);
+            updatePriceDisplay(data[data.length - 1].price, cryptoId);
+        }
+
+        // Simulation de backtesting
+        function runSimulation() {
+            const btn = document.getElementById('runSimulationBtn');
+            const resultsEl = document.getElementById('simulationResults');
+            
+            isSimulating = true;
+            btn.innerHTML = '🔄 Simulation en cours...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                // Résultats simulés
+                const results = {
+                    totalTrades: Math.floor(Math.random() * 50) + 20,
+                    winRate: Math.random() * 40 + 40,
+                    totalReturn: (Math.random() - 0.3) * 200,
+                    maxDrawdown: Math.random() * 30 + 10,
+                    sharpeRatio: Math.random() * 2 + 0.5,
+                    profitFactor: Math.random() * 2 + 0.8
+                };
+
+                // Affichage des résultats
+                document.getElementById('totalTrades').textContent = results.totalTrades;
+                document.getElementById('winRate').textContent = `${results.winRate.toFixed(1)}%`;
+                
+                const returnEl = document.getElementById('totalReturn');
+                const returnIcon = results.totalReturn >= 0 ? '📈' : '📉';
+                const returnColor = results.totalReturn >= 0 ? 'text-green-400' : 'text-red-400';
+                returnEl.innerHTML = `${returnIcon} ${results.totalReturn.toFixed(1)}%`;
+                returnEl.className = `text-xl font-bold ${returnColor}`;
+                
+                document.getElementById('maxDrawdown').textContent = `-${results.maxDrawdown.toFixed(1)}%`;
+                document.getElementById('sharpeRatio').textContent = results.sharpeRatio.toFixed(2);
+                
+                const profitEl = document.getElementById('profitFactor');
+                profitEl.textContent = results.profitFactor.toFixed(2);
+                profitEl.className = `text-xl font-bold ${results.profitFactor >= 1 ? 'text-green-400' : 'text-red-400'}`;
+
+                resultsEl.classList.remove('hidden');
+                
+                btn.innerHTML = '▶️ Lancer Simulation';
+                btn.disabled = false;
+                isSimulating = false;
+            }, 3000);
+        }
+
+        // Reset simulation
+        function resetSimulation() {
+            document.getElementById('simulationResults').classList.add('hidden');
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Vérifier que Chart.js est chargé
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js non chargé');
+                showError('Erreur de chargement des graphiques');
+                return;
+            }
+            
+            initChart();
+            
+            // Chargement initial
+            fetchCryptoData('ethereum', 'h1');
+
+            // Event listeners
+            document.getElementById('cryptoSelect').addEventListener('change', function() {
+                const timeframe = document.getElementById('timeframeSelect').value;
+                fetchCryptoData(this.value, timeframe);
+            });
+
+            document.getElementById('timeframeSelect').addEventListener('change', function() {
+                const crypto = document.getElementById('cryptoSelect').value;
+                fetchCryptoData(crypto, this.value);
+            });
+
+            document.getElementById('refreshBtn').addEventListener('click', function() {
+                const crypto = document.getElementById('cryptoSelect').value;
+                const timeframe = document.getElementById('timeframeSelect').value;
+                fetchCryptoData(crypto, timeframe);
+            });
+
+            document.getElementById('runSimulationBtn').addEventListener('click', runSimulation);
+            document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+
+            // Auto-refresh toutes les 30 secondes
+            setInterval(() => {
+                if (!isSimulating) {
+                    const crypto = document.getElementById('cryptoSelect').value;
+                    const timeframe = document.getElementById('timeframeSelect').value;
+                    fetchCryptoData(crypto, timeframe);
+                }
+            }, 30000);
+        });
     </script>
 </body>
 </html>
